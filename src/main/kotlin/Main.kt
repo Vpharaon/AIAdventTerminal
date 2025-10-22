@@ -11,7 +11,7 @@ fun loadApiToken(): String? {
 
         if (inputStream != null) {
             properties.load(inputStream)
-            properties.getProperty("huggingface.api.token")
+            properties.getProperty("zai.api.token")
         } else {
             null
         }
@@ -22,57 +22,75 @@ fun loadApiToken(): String? {
 
 fun main() {
     println("=".repeat(80))
-    println("Сравнение моделей HuggingFace")
-    println("=".repeat(80))
     println()
 
     // Получаем API токен из конфигурации
     val apiToken = loadApiToken()
     if (apiToken.isNullOrBlank()) {
         println("ОШИБКА: API токен не найден!")
-        println("Создайте файл local.properties с параметром huggingface.api.token")
-        println("Получите токен на: https://huggingface.co/settings/tokens")
+        println("Создайте файл config.properties с параметром zai.api.token")
+        println("Получите токен на: https://z.ai")
         exitProcess(1)
     }
 
-    // Запрашиваем запрос от пользователя
-    println("Введите ваш запрос для моделей:")
-    val userPrompt = readLine()?.trim()
-    if (userPrompt.isNullOrBlank()) {
-        println("ОШИБКА: Запрос не может быть пустым")
-        exitProcess(1)
-    }
-
-    println()
-    println("Запрос: $userPrompt")
-    println()
-
-    // Список моделей для сравнения (начало, середина, конец списка)
-    // Используем открытые модели с поддержкой chat формата
-    val models = listOf(
-        "deepseek-ai/DeepSeek-V3.2-Exp:novita",
-        "Qwen/QwQ-32B:nscale",
-        "meta-llama/Meta-Llama-3-8B-Instruct",
-        "mistralai/Mistral-7B-Instruct-v0.2:featherless-ai",
-        "google/gemma-2-2b-it:nebius",
+    // Список запросов для тестирования
+    val prompts = listOf(
+        "Реши уравнение 2x + 6 = 14",
+//        "5y - 3 = 2y + 9",
+        "Если у Маши 3 яблока, а у Пети в 4 раза больше — сколько у Пети?",
+//        "В магазине: 3 ручки по 15₽ и один блокнот — общая сумма 75₽. Сколько стоит блокнот?",
+        "У отца и сына вместе 36 лет. Отец в 4 раза старше сына. Сколько лет каждому?",
+//        "Дан алгоритм: for i in 1..5 sum += i. Какой результат?",
+        "Опиши, что делает следующий код: if (x > 0) x = x * 2 else x = x - 1",
+//        "Почему голосование вслепую может уменьшать предвзятость?",
+        "Алиса и Боб находятся в городе с часовым поясом X, у Алисы сейчас 3 PM, сколько у Боба...",
+//        "Найди ошибку в рассуждениях: \"Если все A — B; C — A; Следовательно, C — B.\""
     )
 
-    val client = HuggingFaceClient(apiToken)
+    println("Список запросов для тестирования:")
+    prompts.forEachIndexed { index, prompt ->
+        println("${index + 1}. $prompt")
+    }
+    println()
+
+    // Модель для использования
+    val model = "glm-4.5-flash"
+    val client = ZAIClient(apiToken)
     val results = mutableListOf<ModelResult>()
 
-    // Вызываем каждую модель
-    for (model in models) {
+    // Для каждого запроса отправляем два варианта
+    for ((index, prompt) in prompts.withIndex()) {
+        println("=".repeat(80))
+        println("Запрос ${index + 1}: $prompt")
+        println("=".repeat(80))
+
+        // 1. Запрос без изменений
         println("-".repeat(80))
-        println("Вызов модели: $model")
+        println("Вариант 1: Обычный запрос")
         println("-".repeat(80))
 
-        val result = client.callModel(model, userPrompt)
-        results.add(result)
+        val result1 = client.callModel(model, prompt)
+        results.add(result1)
 
-        if (result.error != null) {
-            println("ОШИБКА: ${result.error}")
+        if (result1.error != null) {
+            println("ОШИБКА: ${result1.error}")
         } else {
-            println("Ответ получен за ${result.responseTimeMs} мс")
+            println("Ответ получен за ${result1.responseTimeMs} мс")
+        }
+
+        // 2. Запрос с добавлением "Решай пошагово"
+        println("-".repeat(80))
+        println("Вариант 2: С указанием 'Решай пошагово'")
+        println("-".repeat(80))
+
+        val promptWithSteps = "$prompt. Решай пошагово"
+        val result2 = client.callModel(model, promptWithSteps)
+        results.add(result2)
+
+        if (result2.error != null) {
+            println("ОШИБКА: ${result2.error}")
+        } else {
+            println("Ответ получен за ${result2.responseTimeMs} мс")
         }
         println()
     }
@@ -91,63 +109,62 @@ fun printComparisonTable(results: List<ModelResult>) {
     println()
 
     // Заголовок таблицы
-    println(String.format("%-35s | %10s | %10s | %10s | %10s",
-        "Модель", "Время (мс)", "Вх.токены", "Вых.токены", "Стоимость"))
+    println(String.format("%-5s | %10s | %10s | %10s",
+        "№", "Время (мс)", "Вх.токены", "Вых.токены"))
     println("-".repeat(80))
 
     // Данные
-    for (result in results) {
-        val modelShortName = result.modelName.split("/").lastOrNull() ?: result.modelName
-        val cost = result.estimatedCost?.let { String.format("$%.6f", it) } ?: "Бесплатно"
-
-        println(String.format("%-35s | %10d | %10d | %10d | %10s",
-            modelShortName.take(35),
+    results.forEachIndexed { index, result ->
+        println(String.format("%-5d | %10d | %10d | %10d",
+            index + 1,
             result.responseTimeMs,
             result.inputTokens,
-            result.outputTokens,
-            cost
+            result.outputTokens
         ))
-    }
-    println()
-
-    // Статистика
-    val successfulResults = results.filter { it.error == null }
-    if (successfulResults.isNotEmpty()) {
-        val fastestModel = successfulResults.minByOrNull { it.responseTimeMs }
-        val slowestModel = successfulResults.maxByOrNull { it.responseTimeMs }
-        val mostTokens = successfulResults.maxByOrNull { it.totalTokens }
-
-        println("СТАТИСТИКА:")
-        println("  Самая быстрая модель: ${fastestModel?.modelName} (${fastestModel?.responseTimeMs} мс)")
-        println("  Самая медленная модель: ${slowestModel?.modelName} (${slowestModel?.responseTimeMs} мс)")
-        println("  Больше всего токенов: ${mostTokens?.modelName} (${mostTokens?.totalTokens} токенов)")
-
-        val totalCost = successfulResults.mapNotNull { it.estimatedCost }.sum()
-        if (totalCost > 0) {
-            println("  Общая стоимость запросов: $${String.format("%.6f", totalCost)}")
-        }
     }
     println()
 }
 
+fun formatResponse(text: String): String {
+    // Убираем начальные и конечные переводы строк
+    var formatted = text.trim()
+
+    // Заменяем LaTeX формулы на более читаемый вид
+    // Inline формулы \\(...\\) заменяем на простой вид
+    formatted = formatted.replace(Regex("""\\?\\\\\(([^)]+)\\?\\\\\)""")) { matchResult ->
+        " ${matchResult.groupValues[1]} "
+    }
+
+    // Block формулы \\[...\\] заменяем с отступами
+    formatted = formatted.replace(Regex("""\\?\\\\\[([^\]]+)\\?\\\\\]""")) { matchResult ->
+        "\n    ${matchResult.groupValues[1]}\n"
+    }
+
+    // Улучшаем отображение заголовков ###
+    formatted = formatted.replace(Regex("""^### (.+)$""", RegexOption.MULTILINE)) { matchResult ->
+        "\n┌─ ${matchResult.groupValues[1]} ─┐"
+    }
+
+    // Улучшаем отображение жирного текста **текст**
+    formatted = formatted.replace(Regex("""\*\*(.+?)\*\*""")) { matchResult ->
+        "【${matchResult.groupValues[1]}】"
+    }
+
+    return formatted
+}
+
 fun printDetailedResponses(results: List<ModelResult>) {
     println("=".repeat(80))
-    println("ДЕТАЛЬНЫЕ ОТВЕТЫ МОДЕЛЕЙ")
+    println("ДЕТАЛЬНЫЕ ОТВЕТЫ")
     println("=".repeat(80))
     println()
 
-    for (result in results) {
+    results.forEachIndexed { index, result ->
         println("-".repeat(80))
-        println("Модель: ${result.modelName}")
+        println("Ответ ${index + 1}")
         println("-".repeat(80))
         println("Время ответа: ${result.responseTimeMs} мс")
         println("Токены: ${result.inputTokens} (вход) + ${result.outputTokens} (выход) = ${result.totalTokens} (всего)")
-
-        if (result.estimatedCost != null) {
-            println("Стоимость: $${String.format("%.6f", result.estimatedCost)}")
-        } else {
-            println("Стоимость: Бесплатно")
-        }
 
         if (result.error != null) {
             println()
@@ -155,7 +172,9 @@ fun printDetailedResponses(results: List<ModelResult>) {
         } else {
             println()
             println("Ответ:")
-            println(result.response)
+            println()
+            val formattedResponse = formatResponse(result.response)
+            println(formattedResponse)
         }
         println()
     }

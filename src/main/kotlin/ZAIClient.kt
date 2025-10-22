@@ -8,10 +8,10 @@ import okhttp3.RequestBody.Companion.toRequestBody
 import org.example.models.*
 import java.util.concurrent.TimeUnit
 
-class HuggingFaceClient(private val apiToken: String) {
+class ZAIClient(private val apiToken: String) {
 
     private val client = OkHttpClient.Builder()
-        .connectTimeout(60, TimeUnit.SECONDS)
+        .connectTimeout(20, TimeUnit.SECONDS)
         .readTimeout(120, TimeUnit.SECONDS)
         .writeTimeout(60, TimeUnit.SECONDS)
         .build()
@@ -35,16 +35,18 @@ class HuggingFaceClient(private val apiToken: String) {
     }
 
     private fun makeApiRequest(modelName: String, prompt: String): String {
-        val requestBody = HuggingFaceRequest(
-            messages = listOf(Message(role = "user", content = prompt)),
+        val requestBody = ZAIRequest(
             model = modelName,
+            messages = listOf(Message(role = "user", content = prompt)),
+            max_tokens = 4096,
+            temperature = 0.5,
             stream = false
         )
 
-        val jsonBody = json.encodeToString(HuggingFaceRequest.serializer(), requestBody)
+        val jsonBody = json.encodeToString(ZAIRequest.serializer(), requestBody)
 
         val request = Request.Builder()
-            .url("https://router.huggingface.co/v1/chat/completions")
+            .url("https://api.z.ai/api/paas/v4/chat/completions")
             .addHeader("Authorization", "Bearer $apiToken")
             .addHeader("Content-Type", "application/json")
             .post(jsonBody.toRequestBody("application/json".toMediaType()))
@@ -68,13 +70,13 @@ class HuggingFaceClient(private val apiToken: String) {
         prompt: String
     ): ModelResult {
         val parsedResponse = try {
-            json.decodeFromString<HuggingFaceResponse>(responseBody)
+            json.decodeFromString<ZAIResponse>(responseBody)
         } catch (e: Exception) {
             return createErrorResult(
                 modelName,
                 responseTime,
                 prompt,
-                "Parse error: ${e.message}"
+                "Parse error: ${e.message}\nResponse: $responseBody"
             )
         }
 
@@ -82,7 +84,9 @@ class HuggingFaceClient(private val apiToken: String) {
             return createErrorResult(modelName, responseTime, prompt, parsedResponse.error)
         }
 
-        val generatedText = parsedResponse.choices?.firstOrNull()?.message?.content ?: ""
+        val messageData = parsedResponse.choices?.firstOrNull()?.message
+        val generatedText = messageData?.content ?: ""
+
         val inputTokens = parsedResponse.usage?.prompt_tokens ?: estimateTokens(prompt)
         val outputTokens = parsedResponse.usage?.completion_tokens ?: estimateTokens(generatedText)
         val totalTokens = parsedResponse.usage?.total_tokens ?: (inputTokens + outputTokens)

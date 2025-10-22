@@ -9,8 +9,10 @@ data class Message(
 )
 
 @Serializable
-data class HuggingFaceRequest(
-    val messages: List<Message>,
+data class ZAIRequest(
     val model: String,
+    val messages: List<Message>,
+    val max_tokens: Int = 4096,
+    val temperature: Double = 1.0,
     val stream: Boolean = false
 )

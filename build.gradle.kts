@@ -53,9 +53,9 @@ tasks.register("generateConfig") {
         resourcesDir.mkdirs()
 
         val configFile = file("src/main/resources/config.properties")
-        val token = localProperties.getProperty("huggingface.api.token", "")
+        val token = localProperties.getProperty("zai.api.token", "")
 
-        configFile.writeText("huggingface.api.token=$token\n")
+        configFile.writeText("zai.api.token=$token\n")
     }
 }
 
