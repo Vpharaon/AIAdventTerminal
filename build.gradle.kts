@@ -22,14 +22,21 @@ val localProperties = Properties().apply {
 }
 
 dependencies {
-    // HTTP клиент для запросов к API
-    implementation("com.squareup.okhttp3:okhttp:4.12.0")
+    // Ktor HTTP клиент
+    implementation("io.ktor:ktor-client-core:2.3.7")
+    implementation("io.ktor:ktor-client-cio:2.3.7")
+    implementation("io.ktor:ktor-client-content-negotiation:2.3.7")
+    implementation("io.ktor:ktor-serialization-kotlinx-json:2.3.7")
+    implementation("io.ktor:ktor-client-logging:2.3.7")
 
     // JSON сериализация
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.0")
 
     // Корутины для асинхронных операций
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.7.3")
+
+    // Логирование
+    implementation("ch.qos.logback:logback-classic:1.4.14")
 
     testImplementation(kotlin("test"))
 }
