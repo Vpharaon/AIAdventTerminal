@@ -39,7 +39,7 @@ fun main(): Unit = runBlocking {
     val agent1 = Agent1(aiClient = client)
     val agent2 = Agent2(aiClient = client)
 
-    print("Введите ваш запрос: ")
+    print("Введите по которому нужно составить задание для 3-го класса: ")
     val userMessage = readln()
 
     val agent1InputTask = TaskInput(message = userMessage)
